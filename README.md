@@ -43,3 +43,20 @@ Exemplos: `43981` em dois bytes é `"abcd"`; `65537` em tamanho mínimo é `"010
 ```
 
 Os parâmetros CRT são `dp = d mod (p - 1)`, `dq = d mod (q - 1)` e `qInv = q⁻¹ mod p`.
+
+## Funções e Interfaces do Pacote rsa_core
+
+O pacote `rsa_core` fornece os seguintes componentes para a implementação do esquema RSA-OAEP:
+
+- **Primitivas Criptográficas**:
+  - `RSAPublicKey.rsa_ep(m: int) -> int`: Operação pública $c = m^e \pmod n$ para cifrar o bloco representativo $m = \text{OS2IP}(EM)$.
+  - `RSAPrivateKey.rsa_dp(c: int) -> int`: Operação privada $m = c^d \pmod n$ acelerada por CRT para recuperar $m$ a partir do ciphertext $c$.
+- **Dimensões do Bloco**:
+  - `key.modulus_bits` e `key.n`: Para calcular o tamanho do bloco $k = \lceil \text{modulus\_bits} / 8 \rceil$ e o limite máximo de mensagem ($k - 2 \cdot \text{hLen} - 2$).
+- **Importação de Chaves**:
+  - `import_public_key(data)` / `import_public_key_file(filepath)`: Carrega a chave pública para cifragem.
+  - `import_private_key(data)` / `import_private_key_file(filepath)`: Carrega e valida a consistência da chave privada para decifragem.
+- **Utilitários e Tratamento de Erros**:
+  - `int_to_hex(val, exact_bytes)` / `hex_to_int(hex_str, exact_bytes)`: Conversão entre inteiros e formato hexadecimal padronizado.
+  - `RSAError`: Exceção base para reportar falhas de verificação de padding e decodificação de forma segura.
+

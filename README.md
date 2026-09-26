@@ -60,3 +60,46 @@ O pacote `rsa_core` fornece os seguintes componentes para a implementação do e
   - `int_to_hex(val, exact_bytes)` / `hex_to_int(hex_str, exact_bytes)`: Conversão entre inteiros e formato hexadecimal padronizado.
   - `RSAError`: Exceção base para reportar falhas de verificação de padding e decodificação de forma segura.
 
+
+# Parte II - RSA-OAEP
+
+Pacote `rsa_oaep`, implementação de RSAES-OAEP (RFC 8017, Seção 7.1) sobre as chaves do `rsa_core`, com SHA3-256 como hash do OAEP e do MGF1.
+
+## API
+
+```python
+from rsa_core import generate_key_pair
+from rsa_oaep import encrypt, decrypt
+
+priv = generate_key_pair()
+ct = encrypt(priv.get_public_key(), b"mensagem", label=b"")   # k bytes
+pt = decrypt(priv, ct, label=b"")
+```
+
+- `encrypt(pub, message, label=b"", hash_factory=hashlib.sha3_256) -> bytes`: ciphertext com exatamente `k = ceil(modulus_bits / 8)` bytes.
+- `decrypt(priv, ciphertext, label=b"", hash_factory=hashlib.sha3_256) -> bytes`: devolve a mensagem ou lança `DecryptionError`.
+- `max_message_length(k, hash_factory)`: `k - 2*hLen - 2`.
+- `eme_oaep_encode(message, k, label, hash_factory, seed=None)` / `eme_oaep_decode(em, k, label, hash_factory)`: codificação EME-OAEP isolada (`seed` permite fixar a seed; se omitida, é gerada com `secrets`).
+- `mgf1(seed, mask_len, hash_factory)`: MGF1 (RFC 8017, B.2.1).
+- `DecryptionError`, `MessageTooLongError`: ambas derivam de `RSAError`.
+
+Chave de tipo errado, ou `message`/`label`/`ciphertext` que não sejam `bytes`/`bytearray`, geram `TypeError`.
+
+## Formato do bloco
+
+```text
+DB = lHash || PS || 0x01 || M               (k - hLen - 1 bytes)
+maskedDB   = DB   xor MGF1(seed, k - hLen - 1)
+maskedSeed = seed xor MGF1(maskedDB, hLen)
+EM = 0x00 || maskedSeed || maskedDB         (k bytes)
+```
+
+`lHash = SHA3-256(label)`, `PS` são zeros e `seed` tem `hLen = 32` bytes aleatórios (`secrets`). O ciphertext é `I2OSP(OS2IP(EM)^e mod n, k)`.
+
+## Erro único de decifragem
+
+Qualquer falha na decifragem (tamanho errado, `c >= n`, byte inicial diferente de zero, `lHash` divergente, separador `0x01` ausente, lixo no `PS`) lança a mesma `DecryptionError("decryption error")`. Se o atacante distinguisse as causas, teria um oráculo de padding capaz de recuperar o texto claro com consultas adaptativas (ataque de Manger). Pelo mesmo motivo a verificação do bloco não sai cedo: a busca pelo separador percorre o `DB` inteiro, `lHash` é comparado com `hmac.compare_digest` e as condições são combinadas numa flag só. A operação privada usa blinding e confere `m^e mod n == c` antes de decodificar.
+
+## Limite de mensagem
+
+Com módulo de 2048 bits, `k = 256` e `hLen = 32`, logo o máximo é `256 - 2*32 - 2 = 190` bytes. Mensagens maiores geram `MessageTooLongError`.

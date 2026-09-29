@@ -5,18 +5,11 @@ import hmac
 import math
 import secrets
 
-from rsa_core.keys import RSAPrivateKey, RSAPublicKey
-from rsa_core.math_utils import gcd, mod_inverse
+from rsa_core import RSAPrivateKey, RSAPublicKey
+from rsa_core import gcd, mod_inverse
 from rsa_oaep.errors import DecryptionError, MessageTooLongError
-from rsa_oaep.mgf1 import HashFactory, mgf1
-from rsa_oaep.primitives import i2osp, os2ip, xor_bytes
-
-
-def _require_bytes(value: object, name: str) -> bytes:
-    if not isinstance(value, (bytes, bytearray)):
-        raise TypeError(f"'{name}' deve ser bytes ou bytearray, recebido {type(value).__name__}.")
-    return bytes(value)
-
+from utils import HashFactory, mgf1
+from utils import i2osp, os2ip, xor_bytes, require_bytes
 
 def _block_size(modulus_bits: int) -> int:
     return math.ceil(modulus_bits / 8)
@@ -35,8 +28,8 @@ def eme_oaep_encode(
     seed: bytes | None = None,
 ) -> bytes:
     """Codifica a mensagem no bloco EM = 0x00 || maskedSeed || maskedDB."""
-    message = _require_bytes(message, "message")
-    label = _require_bytes(label, "label")
+    message = require_bytes(message, "message")
+    label = require_bytes(label, "label")
     h_len = hash_factory().digest_size
 
     max_len = max_message_length(k, hash_factory)
@@ -66,8 +59,8 @@ def eme_oaep_decode(
     hash_factory: HashFactory = hashlib.sha3_256,
 ) -> bytes:
     """Decodifica o bloco EM e devolve a mensagem; qualquer falha gera DecryptionError."""
-    em = _require_bytes(em, "em")
-    label = _require_bytes(label, "label")
+    em = require_bytes(em, "em")
+    label = require_bytes(label, "label")
     h_len = hash_factory().digest_size
 
     if len(em) != k or k < 2 * h_len + 2:
@@ -139,8 +132,8 @@ def encrypt(
     """RSAES-OAEP-ENCRYPT: devolve o ciphertext com exatamente k bytes."""
     if not isinstance(pub, RSAPublicKey):
         raise TypeError(f"Esperado RSAPublicKey, recebido {type(pub).__name__}.")
-    message = _require_bytes(message, "message")
-    label = _require_bytes(label, "label")
+    message = require_bytes(message, "message")
+    label = require_bytes(label, "label")
 
     k = _block_size(pub.modulus_bits)
     em = eme_oaep_encode(message, k, label, hash_factory)
@@ -157,8 +150,8 @@ def decrypt(
     """RSAES-OAEP-DECRYPT: devolve a mensagem ou lança DecryptionError."""
     if not isinstance(priv, RSAPrivateKey):
         raise TypeError(f"Esperado RSAPrivateKey, recebido {type(priv).__name__}.")
-    ciphertext = _require_bytes(ciphertext, "ciphertext")
-    label = _require_bytes(label, "label")
+    ciphertext = require_bytes(ciphertext, "ciphertext")
+    label = require_bytes(label, "label")
 
     k = _block_size(priv.modulus_bits)
     h_len = hash_factory().digest_size

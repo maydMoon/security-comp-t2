@@ -3,7 +3,7 @@
 import hashlib
 from typing import Any, Callable
 
-from rsa_oaep.primitives import i2osp
+from utils.primitives import i2osp
 
 HashFactory = Callable[..., Any]
 

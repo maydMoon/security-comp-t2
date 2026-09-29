@@ -20,3 +20,8 @@ def xor_bytes(a: bytes, b: bytes) -> bytes:
     if len(a) != len(b):
         raise ValueError("xor_bytes: sequências de tamanhos diferentes.")
     return bytes(x ^ y for x, y in zip(a, b))
+
+def require_bytes(value: object, name: str) -> bytes:
+    if not isinstance(value, (bytes, bytearray)):
+        raise TypeError(f"'{name}' deve ser bytes ou bytearray, recebido {type(value).__name__}.")
+    return bytes(value)

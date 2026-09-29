@@ -1,6 +1,6 @@
 """Exceções do esquema RSA-OAEP."""
 
-from rsa_core.exceptions import RSAError
+from rsa_core import RSAError
 
 
 class DecryptionError(RSAError):

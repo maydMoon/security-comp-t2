@@ -81,7 +81,7 @@ A chave privada acrescenta `d`, `p`, `q`, `dp`, `dq` e `qInv`.
 }
 ```
 
-Convenções completas de tamanho e de representação em [`docs/implementacao.md`](docs/implementacao.md).
+Convenções completas de tamanho e de representação em [`docs/implementacao.md`](docs/Implementacao.md).
 O envelope JSON acima é usado pela demonstração; a API `rsa_pss` recebe mensagem e assinatura em bytes por `sign(priv, message)` e `verify(pub, message, signature)`.
 
 ## Onde está cada item do enunciado
@@ -92,7 +92,7 @@ O envelope JSON acima é usado pela demonstração; a API `rsa_pss` recebe mensa
 | II | RSA-OAEP com SHA3-256, MGF1, detecção de erro | `rsa_oaep/` | `tests/` |
 | III | RSA-PSS (salt, MGF1), assinatura em Base64 | `rsa_pss/` | `tests/` · demo, etapas 3 e 8 |
 | IV | Parsing, verificação, adulteração (a), (b), (c) | `examples/`, `tests/` | `tests/` · demo, etapas 5 a 10 |
-| V | Análise de segurança | [`docs/analise_seguranca.md`](docs/analise_seguranca.md) | leitura |
+| V | Análise de segurança | [`docs/analise_seguranca.md`](docs/Analise_de_seguranca.md) | leitura |
 | — | Interoperabilidade (teste adicional) | <<CAMINHO DO TESTE>> | <<COMANDO>> |
 
 ## Decisões de projeto

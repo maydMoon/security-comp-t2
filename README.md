@@ -1,105 +1,113 @@
-# Convenções - Parte I
-## Interface das chaves RSA
+# Assinatura Digital e Verificação Segura de Arquivos (RSA-OAEP e RSA-PSS)
 
-As chaves são exportadas em arquivos JSON codificados em UTF-8. Os blocos abaixo são modelos: os valores entre `< >` são substituídos na exportação.
+CIC0201 – Segurança Computacional – 2026/2 · Trabalho de Implementação 2
 
-`modulus_bits` é um número inteiro, sem aspas, igual a `bit_length(n)` e deve ser maior ou igual a 2048.
+<!-- **Grupo:** <<NOMES E MATRÍCULAS DOS 4 INTEGRANTES>> -->
 
-## Representação dos inteiros
+Implementação, em Python, dos componentes de um sistema de assinatura digital baseado em RSA: geração de chaves com Miller-Rabin, cifragem RSA-OAEP, assinatura RSA-PSS, verificação e testes de adulteração. Tudo com SHA3-256. As primitivas RSA, o OAEP, o MGF1 e o PSS são implementados aqui, sem OpenSSL nem bibliotecas equivalentes.
 
-Cada campo `<hex>` é uma string hexadecimal em minúsculas, sem prefixo `0x` e sem espaços. A string tem sempre um número par de dígitos; cada par representa um byte, em ordem big-endian.
+## Requisitos
 
-- `n` e `d` ocupam exatamente `k = ceil(modulus_bits / 8)` bytes, com zeros à esquerda quando necessário.
-- `e`, `p`, `q`, `dp`, `dq` e `qInv` ocupam o menor número possível de bytes, sem padding.
+- Python 3.10 ou superior.
+- Nenhuma dependência externa para o sistema (o SHA3-256 vem do `hashlib`).
+- `cryptography` **somente** para o teste de interoperabilidade: `pip install cryptography`.
 
-Exemplos: `43981` em dois bytes é `"abcd"`; `65537` em tamanho mínimo é `"010001"`.
+## Estrutura
 
-## Chave pública
-
-```text
-{
-  "algorithm": "RSA",
-  "modulus_bits": <bit_length(n)>,
-  "n": "<hex>",
-  "e": "<hex>"
-}
+```
+rsa_core/      Parte I    Miller-Rabin, geração de chaves, CRT, importação/exportação (JSON)
+rsa_oaep/      Parte II   RSA-OAEP, MGF1, I2OSP/OS2IP
+rsa_pss/       Parte III   RSA-PSS e assinatura/verificação
+integrity/     Parte IV   envelope, demonstração e testes de integridade
+tests/                    testes de unidade para os demais componentes
+docs/                     detalhes de implementação e análise de segurança
 ```
 
-## Chave privada
+## Como executar
 
-```text
-{
-  "algorithm": "RSA",
-  "modulus_bits": <bit_length(n)>,
-  "n": "<hex>",
-  "e": "<hex>",
-  "d": "<hex>",
-  "p": "<hex>",
-  "q": "<hex>",
-  "dp": "<hex>",
-  "dq": "<hex>",
-  "qInv": "<hex>"
-}
+Sempre a partir da raiz do repositório.
+
+**Testes**
+
+```bash
+python -m unittest discover -s integrity -p integrity_tests.py -v
 ```
 
-Os parâmetros CRT são `dp = d mod (p - 1)`, `dq = d mod (q - 1)` e `qInv = q⁻¹ mod p`.
+**Demonstração guiada** (pausa entre as etapas; use `--no-pause` para rodar direto)
 
-## Funções e Interfaces do Pacote rsa_core
+```bash
+python -m integrity.integrity_demo
+```
 
-O pacote `rsa_core` fornece os seguintes componentes para a implementação do esquema RSA-OAEP:
+Na primeira execução a demo gera dois pares de chaves de 2048 bits, o que pode levar de alguns segundos a mais de um minuto. Elas ficam em `integrity/.demo_keys/`, diretório ignorado pelo Git, e são reutilizadas depois. Não têm proteção por senha: servem só para a demonstração.
 
-- **Primitivas Criptográficas**:
-  - `RSAPublicKey.rsa_ep(m: int) -> int`: Operação pública $c = m^e \pmod n$ para cifrar o bloco representativo $m = \text{OS2IP}(EM)$.
-  - `RSAPrivateKey.rsa_dp(c: int) -> int`: Operação privada $m = c^d \pmod n$ acelerada por CRT para recuperar $m$ a partir do ciphertext $c$.
-- **Dimensões do Bloco**:
-  - `key.modulus_bits` e `key.n`: Para calcular o tamanho do bloco $k = \lceil \text{modulus\_bits} / 8 \rceil$ e o limite máximo de mensagem ($k - 2 \cdot \text{hLen} - 2$).
-- **Importação de Chaves**:
-  - `import_public_key(data)` / `import_public_key_file(filepath)`: Carrega a chave pública para cifragem.
-  - `import_private_key(data)` / `import_private_key_file(filepath)`: Carrega e valida a consistência da chave privada para decifragem.
-- **Utilitários e Tratamento de Erros**:
-  - `int_to_hex(val, exact_bytes)` / `hex_to_int(hex_str, exact_bytes)`: Conversão entre inteiros e formato hexadecimal padronizado.
-  - `RSAError`: Exceção base para reportar falhas de verificação de padding e decodificação de forma segura.
-
-
-# Parte II - RSA-OAEP
-
-Pacote `rsa_oaep`, implementação de RSAES-OAEP (RFC 8017, Seção 7.1) sobre as chaves do `rsa_core`, com SHA3-256 como hash do OAEP e do MGF1.
-
-## API
+**Uso em código**
 
 ```python
-from rsa_core import generate_key_pair
+from rsa_core import generate_key_pair, export_private_key_file, export_public_key_file
 from rsa_oaep import encrypt, decrypt
+from rsa_pss import sign, verify
 
-priv = generate_key_pair()
-ct = encrypt(priv.get_public_key(), b"mensagem", label=b"")   # k bytes
-pt = decrypt(priv, ct, label=b"")
+priv = generate_key_pair()                       # 2048 bits
+pub = priv.get_public_key()
+export_private_key_file(priv, "priv.json")
+export_public_key_file(pub, "pub.json")
+
+ct = encrypt(pub, b"mensagem curta")             # RSA-OAEP (máx. 190 bytes com 2048 bits)
+assert decrypt(priv, ct) == b"mensagem curta"
+
+content = b"conteudo do arquivo"
+signature = sign(priv, content)                  # RSA-PSS: assinatura binária de k bytes
+print("ARQUIVO ÍNTEGRO" if verify(pub, content, signature) else "ASSINATURA INVÁLIDA")
 ```
 
-- `encrypt(pub, message, label=b"", hash_factory=hashlib.sha3_256) -> bytes`: ciphertext com exatamente `k = ceil(modulus_bits / 8)` bytes.
-- `decrypt(priv, ciphertext, label=b"", hash_factory=hashlib.sha3_256) -> bytes`: devolve a mensagem ou lança `DecryptionError`.
-- `max_message_length(k, hash_factory)`: `k - 2*hLen - 2`.
-- `eme_oaep_encode(message, k, label, hash_factory, seed=None)` / `eme_oaep_decode(em, k, label, hash_factory)`: codificação EME-OAEP isolada (`seed` permite fixar a seed; se omitida, é gerada com `secrets`).
-- `mgf1(seed, mask_len, hash_factory)`: MGF1 (RFC 8017, B.2.1).
-- `DecryptionError`, `MessageTooLongError`: ambas derivam de `RSAError`.
+## Formatos
 
-Chave de tipo errado, ou `message`/`label`/`ciphertext` que não sejam `bytes`/`bytearray`, geram `TypeError`.
+**Chaves** (JSON UTF-8, inteiros em hexadecimal minúsculo, big-endian):
 
-## Formato do bloco
-
-```text
-DB = lHash || PS || 0x01 || M               (k - hLen - 1 bytes)
-maskedDB   = DB   xor MGF1(seed, k - hLen - 1)
-maskedSeed = seed xor MGF1(maskedDB, hLen)
-EM = 0x00 || maskedSeed || maskedDB         (k bytes)
+```json
+{ "algorithm": "RSA", "modulus_bits": 2048, "n": "<hex>", "e": "010001" }
 ```
 
-`lHash = SHA3-256(label)`, `PS` são zeros e `seed` tem `hLen = 32` bytes aleatórios (`secrets`). O ciphertext é `I2OSP(OS2IP(EM)^e mod n, k)`.
+A chave privada acrescenta `d`, `p`, `q`, `dp`, `dq` e `qInv`.
 
-## Erro único de decifragem
+**Documento assinado** (JSON UTF-8):
 
-Qualquer falha na decifragem (tamanho errado, `c >= n`, byte inicial diferente de zero, `lHash` divergente, separador `0x01` ausente, lixo no `PS`) lança a mesma `DecryptionError("decryption error")`. Se o atacante distinguisse as causas, teria um oráculo de padding capaz de recuperar o texto claro com consultas adaptativas (ataque de Manger). Pelo mesmo motivo a verificação do bloco não sai cedo: a busca pelo separador percorre o `DB` inteiro, `lHash` é comparado com `hmac.compare_digest` e as condições são combinadas numa flag só. A operação privada usa blinding e confere `m^e mod n == c` antes de decodificar.
+```json
+{
+  "format": "<<VALOR REAL DO CAMPO format>>",
+  "content": "<arquivo em Base64>",
+  "signature": "<assinatura RSA-PSS em Base64>"
+}
+```
 
-## Limite de mensagem
+Convenções completas de tamanho e de representação em [`docs/implementacao.md`](docs/implementacao.md).
+O envelope JSON acima é usado pela demonstração; a API `rsa_pss` recebe mensagem e assinatura em bytes por `sign(priv, message)` e `verify(pub, message, signature)`.
 
-Com módulo de 2048 bits, `k = 256` e `hLen = 32`, logo o máximo é `256 - 2*32 - 2 = 190` bytes. Mensagens maiores geram `MessageTooLongError`.
+## Onde está cada item do enunciado
+
+| Parte | O que pede | Onde | Como conferir |
+|---|---|---|---|
+| I | Miller-Rabin, chaves ≥ 2048 bits, import/export | `rsa_core/` | `tests/` · demo, etapa 2 |
+| II | RSA-OAEP com SHA3-256, MGF1, detecção de erro | `rsa_oaep/` | `tests/` |
+| III | RSA-PSS (salt, MGF1), assinatura em Base64 | `rsa_pss/` | `tests/` · demo, etapas 3 e 8 |
+| IV | Parsing, verificação, adulteração (a), (b), (c) | `examples/`, `tests/` | `tests/` · demo, etapas 5 a 10 |
+| V | Análise de segurança | [`docs/analise_seguranca.md`](docs/analise_seguranca.md) | leitura |
+| — | Interoperabilidade (teste adicional) | <<CAMINHO DO TESTE>> | <<COMANDO>> |
+
+## Decisões de projeto
+
+- `e = 65537`; primos de 1024 bits com os dois bits mais altos fixados (o módulo tem sempre 2048 bits), `p > q` e `|p − q|` grande, para se proteger da fatoração de Fermat.
+- Miller-Rabin com 64 rodadas e bases aleatórias, depois de um pré-filtro por primos pequenos. Aleatoriedade sempre via `secrets`.
+- Operação privada com CRT (`dp`, `dq`, `qInv`).
+- OAEP: uma única exceção genérica (`DecryptionError`) para qualquer falha, para não criar um oráculo de padding (ataque de Manger); varredura completa do bloco, `hmac.compare_digest` para `lHash`, blinding na operação privada e conferência de `m^e mod n == c` (protege contra falha no CRT).
+- PSS: salt de 32 bytes, então assinar duas vezes o mesmo arquivo gera assinaturas diferentes, ambas válidas.
+- `verify(pub, message, signature)` verifica a assinatura PSS sobre bytes. O parser do envelope e a contenção de erros de entrada são helpers locais da demonstração.
+
+## Testes de adulteração
+
+Cada teste altera uma única coisa e espera `False`: (a) um byte do arquivo, (b) um byte da assinatura, (c) a chave pública (outro par e módulo alterado). Há também entradas inválidas (vazio, não-JSON, campos ausentes, Base64 inválido, assinatura truncada) e a verificação de que o salt gera assinaturas distintas. Nos testes (a) e (b) o envelope adulterado continua bem formado, então quem rejeita é a verificação RSA-PSS, e não um erro de parsing.
+
+## Limitações
+
+O projeto é didático. Python e suas operações com inteiros grandes não garantem execução em tempo constante, então a proteção contra ataques de temporização é apenas uma redução de risco. As chaves privadas ficam em arquivos JSON sem criptografia, e não há certificado: a chave pública precisa ser obtida por um canal confiável.
